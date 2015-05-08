@@ -369,7 +369,7 @@ function handleQueueMessage(message) {
 // Places a new call
 function placeCall() {
     var dialstring = $('#inin-dialstring').val();
-    if (dialstring == undefined) return;
+    if (dialstring == '') return;
 
     var dialData = {
         __type: 'urn:inin.com:interactions:createCallParameters',
@@ -394,6 +394,7 @@ function placeCall() {
         });
 }
 
+// Disconnects the interaction
 function disconnect(interactionId) {
     console.debug('Disconnecting ' + interactionId);
     sendRequest('POST', inin_sessionId + '/interactions/' + interactionId + '/disconnect', 
