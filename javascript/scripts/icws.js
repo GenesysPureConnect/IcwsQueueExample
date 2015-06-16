@@ -151,7 +151,6 @@ function loadCredsCookie() {
         // Convert to JSON object
         var credsCookieData = eval('('+credsCookie+')');
         console.debug('Got credentials cookie');
-        console.debug(credsCookieData);
 
         // Set fields
         $('#inin-server').val(credsCookieData.server);
@@ -308,7 +307,8 @@ function initialize() {
             'Eic_RemoteName',
             'Eic_RemoteAddress',
             'Eic_State',
-            'Eic_ObjectType'
+            'Eic_ObjectType',
+            'Eic_ConferenceId'
         ]
     };
     sendRequest('PUT', inin_sessionId + '/messaging/subscriptions/queues/arbitrarystring', queueSubscriptionData, 
@@ -354,7 +354,7 @@ function processMessage(message) {
     var handled = false;
     switch (message.__type) {
         case 'urn:inin.com:queues:queueContentsMessage':
-            handleQueueMessage(message);
+            handleQueueContentsMessage(message);
             handled = true;
             break;
     }
@@ -364,7 +364,7 @@ function processMessage(message) {
     }
 }
 
-function handleQueueMessage(message) {
+function handleQueueContentsMessage(message) {
     if (!message.isDelta) return;
 
     if (message.interactionsAdded) {
@@ -372,10 +372,15 @@ function handleQueueMessage(message) {
             var interaction = message.interactionsAdded[i];
             $('#inin-myinteractions').append(
                 '<tr id="row-' + interaction.interactionId + '">' +
-                    '<td class="interactionId"><img src="img/delete.png" style="cursor:pointer" onclick="disconnect(\'' + interaction.interactionId + '\')" />' + interaction.interactionId + '</td>' +
+                    '<td class="interactionId">' + 
+                        '<input type="checkbox" id="' + interaction.interactionId + '" />' + 
+                        '<img src="img/delete.png" style="cursor:pointer" onclick="disconnect(\'' + interaction.interactionId + '\')" />' + 
+                        interaction.interactionId + 
+                    '</td>' +
                     '<td class="Eic_RemoteName">' + interaction.attributes.Eic_RemoteName + '</td>' +
                     '<td class="Eic_RemoteAddress">' + interaction.attributes.Eic_RemoteAddress + '</td>' +
                     '<td class="Eic_State">' + interaction.attributes.Eic_State + '</td>' +
+                    '<td class="Eic_ConferenceId">' + interaction.attributes.Eic_ConferenceId + '</td>' +
                 '</tr>'
                 );
         }
@@ -447,6 +452,41 @@ function disconnect(interactionId) {
         }, 
         function (jqXHR, textStatus, errorThrown) {
             console.group('Disconnect request failure');
+            console.debug(jqXHR);
+            console.debug(textStatus);
+            console.error(errorThrown);
+            console.groupEnd();
+        });
+}
+
+function makeConference() {
+    var interactions = [];
+    $('#inin-myinteractions input:checkbox').each(function (index) {
+        if ($(this).prop('checked')) {
+            interactions.push($(this).attr('id'));
+        }
+    });
+
+    // Cancel if we don't have two interactions
+    if (interactions.length < 2) {
+        console.warn('Must have at least two interactions to make a conference!');
+        return;
+    }
+
+    var conferenceData = {
+        interactions: interactions
+    };
+
+    sendRequest('POST', inin_sessionId + '/interactions/conferences', conferenceData,
+        function (data, textStatus, jqXHR) {
+            console.group('Conference request success');
+            console.debug(data);
+            console.debug(textStatus);
+            console.debug(jqXHR);
+            console.groupEnd();
+        }, 
+        function (jqXHR, textStatus, errorThrown) {
+            console.group('Conference request failure');
             console.debug(jqXHR);
             console.debug(textStatus);
             console.error(errorThrown);
