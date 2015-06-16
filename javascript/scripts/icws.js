@@ -7,6 +7,7 @@ var inin_csrfToken = null;
 var inin_server = '';
 var inin_username = '';
 var inin_password = '';
+var inin_station = '';
 
 /****** IMMEDIATE SCRIPTS ******
  * These scripts are run as soon as this script file is loaded.
@@ -150,11 +151,17 @@ function loadCredsCookie() {
         // Convert to JSON object
         var credsCookieData = eval('('+credsCookie+')');
         console.debug('Got credentials cookie');
+        console.debug(credsCookieData);
 
         // Set fields
         $('#inin-server').val(credsCookieData.server);
         $('#inin-port').val(credsCookieData.port);
         $('#inin-username').val(credsCookieData.username);
+        $('#inin-station').val(credsCookieData.station);
+        if (credsCookieData.savePassword == true) {
+            $('#inin-savePasswordCheckbox').prop('checked', true);
+            $('#inin-password').val(credsCookieData.password);
+        }
     } else {
         console.debug('no creds cookie');
     }
@@ -201,13 +208,19 @@ function login() {
     }
     inin_username = $('#inin-username').val().trim();
     inin_password = $('#inin-password').val();
+    inin_station = $('#inin-station').val().trim();
 
 
     // Save credentials cookie
+    console.debug($('#inin-savePasswordCheckbox').prop('checked'));
+    var savePassword = $('#inin-savePasswordCheckbox').prop('checked');
     var cookieData = '{ '+
         '"server":"' + $('#inin-server').val().trim() + '", ' +
         '"port":"' + $('#inin-port').val().trim() + '", ' +
-        '"username":"' + $('#inin-username').val().trim() + '"' +
+        '"username":"' + $('#inin-username').val().trim() + '",' +
+        '"station":"' + $('#inin-station').val().trim() + '",' +
+        '"savePassword":' + savePassword + ',' +
+        '"password":"' + (savePassword ? $('#inin-password').val() : '') + '"' +
         ' }';
     $.cookie(inin_credsCookie, cookieData, { expires: 31 });
 
@@ -244,7 +257,7 @@ function login() {
 
             setError(jsonResponse.message);
             logout();
-        });                
+        });
 }
 
 // Initializes after verifying a valid session exists
@@ -254,6 +267,33 @@ function initialize() {
     inin_messagePollTimer = setInterval(function() {
         sendRequest("GET", inin_sessionId + "/messaging/messages", null, onCheckMessagesSuccess);
     }, inin_messagePollInterval);
+
+    // Set station
+    if (inin_station) {
+        // Build station request
+        stationData = {
+            "__type":"urn:inin.com:connection:workstationSettings",
+            "supportedMediaTypes":[1],
+            "readyForInteractions":true,
+            "workstation": inin_station                  
+        };
+
+        sendRequest('PUT', inin_sessionId + '/connection/station', stationData,
+            function (data, textStatus, jqXHR) {
+                console.group('Set station success');
+                console.debug(data);
+                console.debug(textStatus);
+                console.debug(jqXHR);
+                console.groupEnd();
+            }, 
+            function (jqXHR, textStatus, errorThrown) {
+                console.group('Set station failure');
+                console.debug(jqXHR);
+                console.debug(textStatus);
+                console.error(errorThrown);
+                console.groupEnd();
+            });
+    }
 
     // Watch user's queue
     var queueSubscriptionData = {

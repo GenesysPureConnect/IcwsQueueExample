@@ -67,6 +67,14 @@
 			margin: 0;
 		}
 
+		#inin-password {
+			width: 50%;
+		}
+
+		#inin-savePasswordCheckboxContainer {
+			float: right;
+		}
+
 		#inin-loginbutton {
 			width: 100%;
 			margin: 0;
@@ -104,7 +112,14 @@
 			</tr>
 			<tr>
 				<td style="cursor: help" title="The password for the CIC user">Password:</td>
-				<td colspan="3"><input type="password" id="inin-password" class="inin-input" /></td>
+				<td colspan="3">
+					<input type="password" id="inin-password" class="inin-input" />
+					<div id="inin-savePasswordCheckboxContainer"><input type="checkbox" id="inin-savePasswordCheckbox">Save Password?</td></div>
+				</td>
+			</tr>
+			<tr>
+				<td style="cursor: help" title="The workstation for the CIC user (leave blank for no station)">Station:</td>
+				<td colspan="3"><input type="text" id="inin-station" class="inin-input" /></td>
 			</tr>
 			<tr>
 				<td colspan="4">
