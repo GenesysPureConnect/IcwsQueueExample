@@ -8,6 +8,7 @@ var inin_server = '';
 var inin_username = '';
 var inin_password = '';
 var inin_station = '';
+var inin_identityProviderId = '';
 
 /****** IMMEDIATE SCRIPTS ******
  * These scripts are run as soon as this script file is loaded.
@@ -26,8 +27,6 @@ if (typeof String.prototype.endsWith != 'function') {
     return this.slice(-str.length) == str;
   };
 }
-
-
 
 /****** GENERAL ******
  * These scripts provide general or multi-purpose functionality
@@ -164,6 +163,199 @@ function loadCredsCookie() {
     } else {
         console.debug('no creds cookie');
     }
+}
+
+// Logs in via SSO
+function loginSso() {
+    // Validate
+    if ($('#inin-server').val().trim() == '') {
+        setError('Server cannot be blank!');
+        return;
+    }
+    if ($('#inin-port').val().trim() != '' && !isNumeric($('#inin-port').val().trim())) {
+        setError('Port must be a number!');
+        return;
+    }
+
+    // Clear error message
+    setError();
+
+    inin_server = $('#inin-server').val();
+    if (inin_server.endsWith('/')) {
+        // Remove trailing slash
+        inin_server = inin_server.substring(0, inin_server.length - 1);
+    }
+    if ($('#inin-port').val().trim() == '') {
+        // Add default ports if none specified
+        if (inin_server.startsWith('https'))
+            inin_server += ':8019';
+        else
+            inin_server += ':8018';
+    } else {
+        // Add specified port
+        inin_server += ':' + $('#inin-port').val().trim();
+    }
+
+    if (inin_server.startsWith('http') == false) {
+        if ($('#inin-port').val() == '8019')
+            inin_server = 'https://' + inin_server;
+        else
+            inin_server = 'http://' + inin_server;
+    }
+
+    // Save credentials cookie
+    console.debug($('#inin-savePasswordCheckbox').prop('checked'));
+    var savePassword = $('#inin-savePasswordCheckbox').prop('checked');
+    var cookieData = '{ '+
+        '"server":"' + $('#inin-server').val().trim() + '", ' +
+        '"port":"' + $('#inin-port').val().trim() + '", ' +
+        '"username":"' + $('#inin-username').val().trim() + '",' +
+        '"station":"' + $('#inin-station').val().trim() + '",' +
+        '"savePassword":' + savePassword + ',' +
+        '"password":"' + (savePassword ? $('#inin-password').val() : '') + '"' +
+        ' }';
+    $.cookie(inin_credsCookie, cookieData, { expires: 31 });
+    
+    // Store station    
+    inin_station = $('#inin-station').val().trim();
+
+    // Get list of SSO providers
+    sendRequest('GET', 'connection/server-info?singleSignOnCapabilities=saml2Redirect,saml2Post', 
+        null, 
+        function (data, textStatus, jqXHR) {
+            console.group('Get SSO providers success');
+            console.debug(data);
+            console.debug(textStatus);
+            console.debug(jqXHR);
+            console.groupEnd();
+
+            // Parse data object
+            var jsonData = JSON.parse(data);
+            console.debug(jsonData);
+
+            // Find the SSO provider for IC auth
+            for (var i = jsonData.authentication.identityProviders.length - 1; i >= 0; i--) {
+                var provider = jsonData.authentication.identityProviders[i];
+                console.debug(provider);
+                if (provider.displayName == 'Interaction Center Authentication') {
+                    inin_identityProviderId = provider.identityProviderId;
+                    console.debug(inin_identityProviderId);
+                    break;
+                }
+            };
+
+            // Complete the SSO process
+            completeSso();
+        }, 
+        function (jqXHR, textStatus, errorThrown) {
+            var jsonResponse = JSON.parse(jqXHR.responseText);
+            console.error(data);
+
+            setError(jsonResponse.message);
+            logout();
+        });
+}
+
+function completeSso() {
+    var childWindowUrl = inin_server +
+                        "/icws/connection/single-sign-on/identity-providers/"+
+                         inin_identityProviderId +
+                         '?singleSignOnCapabilities=saml2Post,saml2Redirect' +
+                         '&webBrowserApplicationOrigin=' + window.location.origin;
+
+    // Open the SSO window
+    _childWindow = window.open(childWindowUrl, null, 'fullscreen=no, width=500, height=500');
+
+    //poll the sso window to see if it was closed before a login occured.
+    var timer = setInterval(checkSsoWindowClosed, 500);
+
+    function removeEventListener(){
+        window.removeEventListener("message", receiveMessageFromSsoWindow, false);
+    }
+
+    function checkSsoWindowClosed() {
+        if (_childWindow.closed) {
+           console.debug("single sign on window was closed");
+           clearInterval(timer);
+
+           removeEventListener();
+
+           if(onError){
+               onError();
+           }
+       }
+    }
+
+    function receiveMessageFromSsoWindow(event)
+    {
+        if(event.data.module === "scope"){
+            //angularjs message, ignore
+            return;
+        }
+
+        clearInterval(timer);
+        removeEventListener();
+        _childWindow.close();
+        var ssoData = JSON.parse(event.data);
+
+        if(ssoData.key != "icwsSsoComplete"){
+            console.debug("error connecting to sso " + ssoData.key);
+
+            if(ssoData.data.errorMessage !== ""){
+                console.debug(ssoData.data.errorMessage);
+                if(onError != null){
+                    onError(ssoData.data.errorMessage);
+                }
+            }
+            return;
+        }
+
+        if(ssoData.data.errorId !== ""){
+            console.error(ssoData.data.errorMessage);
+        }
+
+        // Get SSO token to use in login
+        var ssoToken = ssoData.data.token;
+        console.debug(ssoToken);
+    
+        // Log in
+        var loginData = {
+            "__type": "urn:inin.com:connection:singleSignOnTokenConnectionRequestSettings",
+            "applicationName": inin_appname,
+            "singleSignOnToken": ssoToken
+        };
+
+        sendRequest("POST","connection", loginData, 
+            function (data, textStatus, jqXHR) {
+                console.group('Login Success');
+                console.debug(data);
+                console.debug(textStatus);
+                console.debug(jqXHR);
+                console.groupEnd();
+
+                // Parse data object
+                var jsonData = JSON.parse(data);
+                console.debug(data);
+
+                // Save data
+                inin_sessionId = jsonData.sessionId;
+                inin_csrfToken = jsonData.csrfToken;
+                inin_username = jsonData.userID;
+
+                // Initialize application
+                initialize();
+            }, 
+            function (jqXHR, textStatus, errorThrown) {
+                var jsonResponse = JSON.parse(jqXHR.responseText);
+                console.error(data);
+
+                setError(jsonResponse.message);
+                logout();
+            });
+
+     }
+     //add an event listener so that we know when sso is complete and we have a token
+     window.addEventListener("message", receiveMessageFromSsoWindow, false);
 }
 
 // Creates a connection to ICWS

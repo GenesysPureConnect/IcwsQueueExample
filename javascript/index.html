@@ -82,6 +82,13 @@
 			background-color: #CCCCCC;
 		}
 
+		#inin-ssologinbutton {
+			width: 100%;
+			margin: 0;
+			border: 1px solid #000000;
+			background-color: #CCCCCC;
+		}
+
 		#inin-myinteractions {
 			width: 100%;
 			margin: 10px;
@@ -90,6 +97,10 @@
 		#inin-myinteractions, #inin-myinteractions td, #inin-myinteractions th {
 			border: 1px solid #000000;
 			border-collapse: collapse;
+		}
+
+		#inin-ssoserver {
+			width: 250px !important;
 		}
 	</style>
 </head>
@@ -105,6 +116,11 @@
 				<td><input type="text" id="inin-server" class="inin-input" /></td>
 				<td style="cursor: help" title="The port to use for connecting via ICWS. The default is 8018 for HTTP and 8019 for HTTPS. The defaults will be used if left blank.">Port:</td>
 				<td><input size="4" id="inin-port" class="inin-input" /></td>
+			</tr>
+			<tr>
+				<td colspan="4">
+					<button id="inin-ssologinbutton" onclick="loginSso()">Log In (Single Sign On)</button>
+				</td>
 			</tr>
 			<tr>
 				<td style="cursor: help" title="The CIC username to connect with">Username:</td>
